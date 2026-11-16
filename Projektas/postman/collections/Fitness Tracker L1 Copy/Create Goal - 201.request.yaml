@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/goals"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"title":"Mazinti svori","type":"weight_loss","startWeightKg":90,"targetWeightKg":82,"heightCm":183,"age":23}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('goalId', pm.response.json().id);
+    language: text/javascript
+order: 2000

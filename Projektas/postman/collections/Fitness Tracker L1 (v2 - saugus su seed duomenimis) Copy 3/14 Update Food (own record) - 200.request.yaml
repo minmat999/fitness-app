@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/foods/{{newFoodId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"caloriesPer100g":160}'
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 14000

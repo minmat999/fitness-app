@@ -1,0 +1,13 @@
+$kind: http-request
+description: Kreipiamasi su suklastotu/sugadintu tokenu. jwt.verify nepavyksta patikrinti parašo, todel serveris atsako 401.
+url: "{{baseUrl}}/goals"
+method: GET
+headers:
+  Authorization: "{{bearer_token_0bq4}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      // Kreipiamasi su suklastotu/sugadintu tokenu. jwt.verify nepavyksta patikrinti parašo, todel serveris atsako 401.
+      pm.test('401 - negaliojantis zetonas', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 10000

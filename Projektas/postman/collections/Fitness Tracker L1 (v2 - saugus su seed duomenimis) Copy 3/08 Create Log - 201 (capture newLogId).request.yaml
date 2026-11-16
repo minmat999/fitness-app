@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/goals/{{goalId}}/logs"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"date":"2031-01-01","weightKg":80,"activity":"medium","note":"Postman testinis irasas"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('newLogId', pm.response.json().id);
+    language: text/javascript
+order: 8000

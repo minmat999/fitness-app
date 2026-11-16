@@ -1,0 +1,23 @@
+$kind: http-request
+description: Uzregistruoja nauja naudotoja. El. pastas unikalus kiekviena karta ({{$timestamp}}), todel kolekcija galima leisti kelis kartus. Tikrinama, kad nauja paskyra visada gauna role 'user'.
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"email": "temp_{{$timestamp}}@example.com", "password": "Temp123!"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Uzregistruoja nauja naudotoja. El. pastas unikalus kiekviena karta ({{$timestamp}}), todel kolekcija galima leisti kelis kartus. Tikrinama, kad nauja paskyra visada gauna role 'user'.
+      {
+      pm.test('201 - naudotojas sukurtas', () => pm.response.to.have.status(201));
+      const data = pm.response.json();
+      pm.test('role visada user', () => pm.expect(data.role).to.eql('user'));
+      // Issaugome, kad 03 testas galetu bandyti ta pati el. pasta, o 27-29 testai - keisti ir trinti si naudotoja.
+      pm.collectionVariables.set('newUserEmail', data.email);
+      pm.collectionVariables.set('newUserId', data.id);
+      }
+    language: text/javascript
+order: 2000

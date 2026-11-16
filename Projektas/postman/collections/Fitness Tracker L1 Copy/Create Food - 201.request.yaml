@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/foods"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"name":"Varske","caloriesPer100g":130,"proteinPer100g":15,"carbsPer100g":5,"fatPer100g":4}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('foodId', pm.response.json().id);
+    language: text/javascript
+order: 11000

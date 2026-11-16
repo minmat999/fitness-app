@@ -1,0 +1,17 @@
+$kind: http-request
+description: Grazina prisijungusio naudotojo duomenis. Serveris ID ir role suzino IS TOKENO (ne is body), todel atsakymas parodo, kas yra tokene.
+url: "{{baseUrl}}/auth/me"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Grazina prisijungusio naudotojo duomenis. Serveris ID ir role suzino IS TOKENO (ne is body), todel atsakymas parodo, kas yra tokene.
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('tokenas priklauso adminui', () => {
+        pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('adminUserId')));
+        pm.expect(pm.response.json().role).to.eql('admin');
+      });
+    language: text/javascript
+order: 8000

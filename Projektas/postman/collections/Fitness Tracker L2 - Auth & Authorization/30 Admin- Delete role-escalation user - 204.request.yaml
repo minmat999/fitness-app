@@ -1,0 +1,14 @@
+$kind: http-request
+name: "30 Admin: Delete role-escalation user - 204"
+description: "Isvalymas: admin istrina 05 teste sukurta naudotoja, kad DB neliktu testiniu paskyru."
+url: "{{baseUrl}}/users/{{hackUserId}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Isvalymas: admin istrina 05 teste sukurta naudotoja, kad DB neliktu testiniu paskyru.
+      pm.test('204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 30000

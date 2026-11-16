@@ -1,0 +1,287 @@
+{
+  "info": {
+    "name": "Fitness Tracker L1 (v2 - saugus su seed duomenimis)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "goalId", "value": "" },
+    { "key": "logId", "value": "" },
+    { "key": "newLogId", "value": "" },
+    { "key": "foodId", "value": "" },
+    { "key": "newFoodId", "value": "" },
+    { "key": "entryId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Health - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/health" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "02 List Goals - 200 (capture goalId)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals?page=1&limit=10" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const data = pm.response.json();",
+        "pm.test('has pagination', () => pm.expect(data).to.have.property('pagination'));",
+        "if (data.data && data.data.length) pm.collectionVariables.set('goalId', data.data[0].id);"
+      ] } }]
+    },
+    {
+      "name": "03 Get Goal - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "pm.test('has _links', () => pm.expect(pm.response.json()).to.have.property('_links'));"
+      ] } }]
+    },
+    {
+      "name": "04 Update Goal (no-op) - 200",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}",
+        "body": { "mode": "raw", "raw": "{}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "05 Create duplicate Goal - 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals",
+        "body": { "mode": "raw", "raw": "{\"title\":\"Mazinti svori\",\"type\":\"weight_loss\",\"startWeightKg\":80,\"targetWeightKg\":75,\"heightCm\":175,\"age\":25}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('409 - tik vienas tikslas leidziamas', () => pm.response.to.have.status(409));"
+      ] } }]
+    },
+    {
+      "name": "06 List Logs - 200 (capture logId)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/logs?page=1&limit=10" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const data = pm.response.json();",
+        "if (data.data && data.data.length) pm.collectionVariables.set('logId', data.data[0].id);"
+      ] } }]
+    },
+    {
+      "name": "07 Get Log - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{logId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "08 Create Log - 201 (capture newLogId)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs",
+        "body": { "mode": "raw", "raw": "{\"date\":\"2031-01-01\",\"weightKg\":80,\"activity\":\"medium\",\"note\":\"Postman testinis irasas\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('newLogId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "09 Update Log (own record) - 200",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}",
+        "body": { "mode": "raw", "raw": "{\"activity\":\"high\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "10 List Foods - 200 (capture foodId)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/foods?page=1&limit=10" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "const data = pm.response.json();",
+        "if (data.data && data.data.length) pm.collectionVariables.set('foodId', data.data[0].id);"
+      ] } }]
+    },
+    {
+      "name": "11 Get Food - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/foods/{{foodId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "12 Create Food bad payload - 422",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/foods",
+        "body": { "mode": "raw", "raw": "{\"name\":\"Nepilnas irasas\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('422 - truksta caloriesPer100g', () => pm.response.to.have.status(422));"
+      ] } }]
+    },
+    {
+      "name": "13 Create Food - 201 (capture newFoodId)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/foods",
+        "body": { "mode": "raw", "raw": "{\"name\":\"Postman testinis maistas\",\"caloriesPer100g\":150,\"proteinPer100g\":10,\"carbsPer100g\":15,\"fatPer100g\":5}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('newFoodId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "14 Update Food (own record) - 200",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/foods/{{newFoodId}}",
+        "body": { "mode": "raw", "raw": "{\"caloriesPer100g\":160}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "15 Create Entry bad JSON - 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries",
+        "body": { "mode": "raw", "raw": "{\"foodId\":\"{{newFoodId}}\"," }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('400 - blogas JSON', () => pm.response.to.have.status(400));"
+      ] } }]
+    },
+    {
+      "name": "16 Create Entry - 201 (capture entryId)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries",
+        "body": { "mode": "raw", "raw": "{\"foodId\":\"{{newFoodId}}\",\"mealType\":\"breakfast\",\"quantityGrams\":200,\"eatenAt\":\"08:30\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('entryId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "17 Create duplicate main meal - 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries",
+        "body": { "mode": "raw", "raw": "{\"foodId\":\"{{newFoodId}}\",\"mealType\":\"breakfast\",\"quantityGrams\":100,\"eatenAt\":\"09:00\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('409 - pusryciai jau uzfiksuoti', () => pm.response.to.have.status(409));"
+      ] } }]
+    },
+    {
+      "name": "18 List Entries hierarchical - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries?page=1&limit=10" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "19 Get Entry - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries/{{entryId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "20 Update Entry - 200",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries/{{entryId}}",
+        "body": { "mode": "raw", "raw": "{\"quantityGrams\":220}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "21 Missing Entry - 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries/999999" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "22 Missing Goal - 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/abc" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "23 Missing Food - 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/foods/999999" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "24 Dashboard (multi-entity) - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/dashboard" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));",
+        "pm.test('has summary', () => pm.expect(pm.response.json()).to.have.property('summary'));"
+      ] } }]
+    },
+    {
+      "name": "25 Reports - 200",
+      "request": { "method": "GET", "url": "{{baseUrl}}/goals/{{goalId}}/reports?period=month&date=2031-01-01" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "26 Insights - 200",
+      "request": { "method": "POST", "url": "{{baseUrl}}/goals/{{goalId}}/insights?period=month&date=2031-01-01" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "27 Delete Entry (own record) - 204",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries/{{entryId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('204', () => pm.response.to.have.status(204));"
+      ] } }]
+    },
+    {
+      "name": "28 Delete Food (own record) - 204",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/foods/{}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('204', () => pm.response.to.have.status(204));"
+      ] } }]
+    },
+    {
+      "name": "29 Delete Log (own record) - 204",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('204', () => pm.response.to.have.status(204));"
+      ] } }]
+    }
+  ]
+}

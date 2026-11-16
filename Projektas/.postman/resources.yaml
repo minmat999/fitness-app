@@ -1,0 +1,18 @@
+# Use this workspace to collaborate
+workspace:
+  id: 74635af2-3d5b-4c9c-8755-56a2d8d4a018
+
+localResources:
+  specs:
+    - ../backend/docs/api-spec.yaml
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/Fitness Tracker L1 (v2 - saugus su seed duomenimis) Copy: 10e8570c-e384-4d2b-adf2-df6936feeb93
+    ../postman/collections/Fitness Tracker L1 (v2 - saugus su seed duomenimis) Copy 2: 6cd908e2-0c6b-4159-b036-676a5f8e7039
+    ../postman/collections/Fitness Tracker L1 Copy: 2a1815d4-f20d-4668-b854-0db778792caa
+    ../postman/collections/Fitness Tracker L1 (v2 - saugus su seed duomenimis): 9d0fbe9c-bd09-4de8-b9ab-ac0fdcab49b4
+    ../postman/collections/Fitness Tracker L1 (v2 - saugus su seed duomenimis) Copy 3: 2a81758c-07a6-4ec0-a36e-59a70bbe8db0
+    ../postman/collections/Fitness Tracker L2 - Auth & Authorization: efc0a414-6184-40be-99a3-82038ce55082

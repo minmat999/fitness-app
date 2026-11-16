@@ -1,0 +1,18 @@
+$kind: http-request
+description: Paprastas naudotojas prideda nauja maista i kataloga. Tai leidziama visiems prisijungusiems (kad galetu zymeti, ka valge). Sukurto maisto ID issaugomas (userFoodId).
+url: "{{baseUrl}}/foods"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{userToken}}
+body:
+  type: text
+  content: '{"name": "Vartotojo testinis maistas", "caloriesPer100g": 100, "proteinPer100g": 5, "carbsPer100g": 15, "fatPer100g": 2}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Paprastas naudotojas prideda nauja maista i kataloga. Tai leidziama visiems prisijungusiems (kad galetu zymeti, ka valge). Sukurto maisto ID issaugomas (userFoodId).
+      pm.test('201 - naudotojas gali prideti maista', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('userFoodId', pm.response.json().id);
+    language: text/javascript
+order: 15000

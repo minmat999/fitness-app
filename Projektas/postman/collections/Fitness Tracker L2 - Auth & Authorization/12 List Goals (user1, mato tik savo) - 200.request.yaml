@@ -1,0 +1,20 @@
+$kind: http-request
+description: Paprastas naudotojas gauna tikslu sarasa. Jis turi matyti TIK SAVO tikslus. Pirmo tikslo ID issaugomas (goalId).
+url: "{{baseUrl}}/goals"
+method: GET
+headers:
+  Authorization: Bearer {{userToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Paprastas naudotojas gauna tikslu sarasa. Jis turi matyti TIK SAVO tikslus. Pirmo tikslo ID issaugomas (goalId).
+      {
+      pm.test('200', () => pm.response.to.have.status(200));
+      const data = pm.response.json();
+      if (data.data.length) pm.collectionVariables.set('goalId', data.data[0].id);
+      pm.test('visi tikslai priklauso vartotojas1', () => {
+        data.data.forEach(g => pm.expect(g.userId).to.eql(Number(pm.collectionVariables.get('user1Id'))));
+      });
+      }
+    language: text/javascript
+order: 12000

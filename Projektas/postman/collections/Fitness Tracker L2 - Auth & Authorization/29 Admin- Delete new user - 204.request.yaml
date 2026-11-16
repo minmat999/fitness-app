@@ -1,0 +1,14 @@
+$kind: http-request
+name: "29 Admin: Delete new user - 204"
+description: Administratorius istrina 02 teste sukurta naudotoja. Atsakymas 204 No Content.
+url: "{{baseUrl}}/users/{{newUserId}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Administratorius istrina 02 teste sukurta naudotoja. Atsakymas 204 No Content.
+      pm.test('204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 29000

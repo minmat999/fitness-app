@@ -1,0 +1,15 @@
+$kind: collection
+description: "L2 testai: registracija, prisijungimas, JWT tokenai, refresh/logout, autorizacija pagal role ir pagal savininka (ID), apsauga nuo teisiu eskalacijos. Paleisti per Runner is eiles (testai naudoja vienas kito issaugotus kintamuosius). Reikia seed naudotoju is backend/scripts/seedUsers.js."
+variables:
+  baseUrl: http://localhost:3000/api
+  adminToken: ""
+  adminUserId: ""
+  userToken: ""
+  user1Id: ""
+  user2Token: ""
+  goalId: ""
+  foodId: ""
+  userFoodId: ""
+  newUserEmail: ""
+  newUserId: ""
+  hackUserId: ""

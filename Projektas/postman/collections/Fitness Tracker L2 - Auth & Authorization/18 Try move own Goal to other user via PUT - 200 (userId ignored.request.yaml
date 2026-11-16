@@ -1,0 +1,21 @@
+$kind: http-request
+name: 18 Try move own Goal to other user via PUT - 200 (userId ignored)
+description: "Saugumo testas: vartotojas1 bando per PUT body atsiusti svetima userId ir taip 'perkelti' savo tiksla kitam naudotojui. Serveris is body ima tik leistinus laukus (pick), todel userId ignoruojamas ir tikslas lieka vartotojas1."
+url: "{{baseUrl}}/goals/{{goalId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{userToken}}
+body:
+  type: text
+  content: '{"userId": {{adminUserId}}}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Saugumo testas: vartotojas1 bando per PUT body atsiusti svetima userId ir taip 'perkelti' savo tiksla kitam naudotojui. Serveris is body ima tik leistinus laukus (pick), todel userId ignoruojamas ir tikslas lieka vartotojas1.
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('userId nepasikeite - tikslas liko vartotojas1', () => {
+        pm.expect(pm.response.json().userId).to.eql(Number(pm.collectionVariables.get('user1Id')));
+      });
+    language: text/javascript
+order: 18000

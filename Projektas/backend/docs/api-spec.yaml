@@ -1,0 +1,2491 @@
+# FitnessTracker API specifikacija. Perziura narsykleje: /api/docs (Swagger UI).
+openapi: 3.0.3
+info:
+  title: FitnessTracker API
+  version: 2.0.0
+  description: |-
+    Mitybos ir sveikatos tikslų sekimo sistemos REST API.
+
+    Hierarchija: **Tikslas (Goal) → Dienos įrašas (DailyLog) → Valgymas (FoodEntry)**, valgymas nurodo produktą iš **maisto katalogo (Food)**.
+
+    Autentifikacija: prisijungus gaunamas JWT prieigos žetonas, kuris siunčiamas antraštėje `Authorization: Bearer <žetonas>`. Atnaujinimo žetonas laikomas httpOnly slapuke `refreshToken`.
+
+    Rolės: neregistruotas naudotojas (svečias), `user`, `admin`. Visi atsakymai – JSON formatu; klaidos grąžinamos kaip `{"error": "..."}`.
+servers:
+- url: /api
+  description: Publikuota versija (Azure App Service)
+- url: http://localhost:3000/api
+  description: Lokali kūrimo aplinka
+tags:
+- name: Autentifikacija
+- name: Maisto katalogas
+- name: Tikslai
+- name: Dienos įrašai
+- name: Valgymai
+- name: Naudotojai
+- name: Sistema
+security:
+- bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags:
+      - Autentifikacija
+      summary: Naudotojo registracija
+      description: |-
+        Sukuria naują naudotojo paskyrą. Slaptažodis saugomas bcrypt maiša, naujam naudotojui visada priskiriama rolė „user“ (kliento atsiųsta rolė ignoruojama).
+
+        **Prieiga:** Nereikia
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+            example:
+              email: naujas@example.com
+              password: Naujas123!
+      responses:
+        '201':
+          description: Paskyra sukurta
+          content:
+            application/json:
+              example:
+                id: 7
+                email: naujas@example.com
+                role: user
+        '409':
+          description: Toks el. paštas jau užregistruotas
+          content:
+            application/json:
+              example:
+                error: Sis el. pastas jau uzregistruotas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Trūksta privalomų laukų arba netinkamas el. pašto formatas
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: password'
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/login:
+    post:
+      tags:
+      - Autentifikacija
+      summary: Prisijungimas
+      description: |-
+        Patikrina el. paštą ir slaptažodį. Grąžina trumpalaikį prieigos (access) žetoną (15 min.), o ilgalaikį atnaujinimo (refresh) žetoną (7 d.) nustato httpOnly slapuke refreshToken.
+
+        **Prieiga:** Nereikia
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+            example:
+              email: vartotojas1@example.com
+              password: Vartotojas123!
+      responses:
+        '200':
+          description: Prisijungta, grąžinamas prieigos žetonas ir naudotojo duomenys
+          content:
+            application/json:
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzk0NDI3NjgwLCJleHAiOjE3OTQ0Mjg1ODB9.qvGdhpU5XC6c7D-PLoUskzgY1Mc2-nxYG1SrQ2YNSnU
+                user:
+                  id: 2
+                  email: vartotojas1@example.com
+                  role: user
+          headers:
+            Set-Cookie:
+              description: refreshToken=<JWT>; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
+              schema:
+                type: string
+        '401':
+          description: Neteisingas el. paštas arba slaptažodis
+          content:
+            application/json:
+              example:
+                error: Neteisingas el. pastas arba slaptazodis
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Trūksta el. pašto arba slaptažodžio
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: password'
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags:
+      - Autentifikacija
+      summary: Prieigos žetono atnaujinimas
+      description: |-
+        Pagal refreshToken slapuką išduoda naują prieigos žetoną. Senas atnaujinimo žetonas atšaukiamas ir išduodamas naujas (rotacija).
+
+        **Prieiga:** Atnaujinimo žetonas slapuke refreshToken
+      operationId: refresh
+      security:
+      - refreshCookie: []
+      responses:
+        '200':
+          description: Išduotas naujas prieigos žetonas
+          content:
+            application/json:
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzk0NDI3NjgxLCJleHAiOjE3OTQ0Mjg1ODF9.KNYHjX31B-m0PMaxtQs_2u6Ua-b5KG5eREQHz2tWlHg
+          headers:
+            Set-Cookie:
+              description: refreshToken=<JWT>; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
+              schema:
+                type: string
+        '401':
+          description: Slapuko nėra, žetonas negalioja arba yra atšauktas
+          content:
+            application/json:
+              example:
+                error: Nerastas refresh tokenas
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/logout:
+    post:
+      tags:
+      - Autentifikacija
+      summary: Atsijungimas
+      description: |-
+        Atšaukia atnaujinimo žetoną duomenų bazėje ir ištrina refreshToken slapuką.
+
+        **Prieiga:** Atnaujinimo žetonas slapuke refreshToken
+      operationId: logout
+      security:
+      - refreshCookie: []
+      responses:
+        '204':
+          description: Atsijungta
+  /auth/me:
+    get:
+      tags:
+      - Autentifikacija
+      summary: Prisijungusio naudotojo duomenys
+      description: |-
+        Grąžina naudotoją, kurio ID nurodytas prieigos žetone.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: me
+      responses:
+        '200':
+          description: Naudotojo duomenys
+          content:
+            application/json:
+              example:
+                id: 2
+                email: vartotojas1@example.com
+                role: user
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /foods:
+    get:
+      tags:
+      - Maisto katalogas
+      summary: Maisto produktų sąrašas
+      description: |-
+        Grąžina maisto katalogą su puslapiavimu. Galima ieškoti pagal pavadinimo dalį.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: foods_list
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Puslapio numeris (numatytasis 1)
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Įrašų skaičius puslapyje (1–50, numatytasis 10)
+        schema:
+          type: integer
+      - name: search
+        in: query
+        required: false
+        description: Pavadinimo dalis paieškai
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Produktų sąrašas
+          content:
+            application/json:
+              example:
+                data:
+                - id: 1
+                  name: Avižiniai dribsniai
+                  caloriesPer100g: 370
+                  proteinPer100g: 13
+                  carbsPer100g: 60
+                  fatPer100g: 7
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                - id: 11
+                  name: Ryžiai virti
+                  caloriesPer100g: 130
+                  proteinPer100g: 2.7
+                  carbsPer100g: 28
+                  fatPer100g: 0.3
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                pagination:
+                  page: 1
+                  limit: 2
+                  total: 3
+                  pages: 2
+                _links:
+                  self: http://localhost:3000/api/foods?page=1&limit=2&search=vi
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Maisto katalogas
+      summary: Naujas maisto produktas
+      description: |-
+        Prideda produktą į katalogą. Kurti gali bet kuris prisijungęs naudotojas.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: foods_create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodInput'
+            example:
+              name: Kefyras 2,5%
+              caloriesPer100g: 50
+              proteinPer100g: 3
+              carbsPer100g: 4
+              fatPer100g: 2.5
+      responses:
+        '201':
+          description: Produktas sukurtas
+          content:
+            application/json:
+              example:
+                id: 15
+                name: Kefyras 2,5%
+                caloriesPer100g: 50
+                proteinPer100g: 3
+                carbsPer100g: 4
+                fatPer100g: 2.5
+                updatedAt: '2026-11-11T20:08:01.229Z'
+                createdAt: '2026-11-11T20:08:01.229Z'
+        '422':
+          description: Trūksta pavadinimo arba kalorijų
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: caloriesPer100g'
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /foods/{foodId}:
+    get:
+      tags:
+      - Maisto katalogas
+      summary: Vienas maisto produktas
+      description: |-
+        Grąžina produkto maistinę vertę 100 g.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: foods_get
+      parameters:
+      - name: foodId
+        in: path
+        required: true
+        description: Maisto produkto ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Produktas
+          content:
+            application/json:
+              example:
+                id: 2
+                name: Vištienos krūtinėlė
+                caloriesPer100g: 165
+                proteinPer100g: 31
+                carbsPer100g: 0
+                fatPer100g: 3.6
+                createdAt: '2026-11-11T20:07:25.000Z'
+                updatedAt: '2026-11-11T20:07:25.000Z'
+        '404':
+          description: Maisto produktas nerastas
+          content:
+            application/json:
+              example:
+                error: Maistas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - Maisto katalogas
+      summary: Maisto produkto redagavimas
+      description: |-
+        Atnaujina produkto duomenis. Siunčiami tik keičiami laukai.
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: foods_update
+      parameters:
+      - name: foodId
+        in: path
+        required: true
+        description: Maisto produkto ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodInput'
+            example:
+              caloriesPer100g: 52
+      responses:
+        '200':
+          description: Produktas atnaujintas
+          content:
+            application/json:
+              example:
+                id: 15
+                name: Kefyras 2,5%
+                caloriesPer100g: 52
+                proteinPer100g: 3
+                carbsPer100g: 4
+                fatPer100g: 2.5
+                createdAt: '2026-11-11T20:08:01.000Z'
+                updatedAt: '2026-11-11T20:08:01.252Z'
+        '403':
+          description: Redaguoti gali tik administratorius
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Maisto produktas nerastas
+          content:
+            application/json:
+              example:
+                error: Maistas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Maisto katalogas
+      summary: Maisto produkto šalinimas
+      description: |-
+        Pašalina produktą iš katalogo. Produkto, kuris jau naudojamas valgymuose, ištrinti negalima.
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: foods_delete
+      parameters:
+      - name: foodId
+        in: path
+        required: true
+        description: Maisto produkto ID
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Produktas pašalintas
+        '403':
+          description: Šalinti gali tik administratorius
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Maisto produktas nerastas
+          content:
+            application/json:
+              example:
+                error: Maistas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Produktas naudojamas valgymo įrašuose
+          content:
+            application/json:
+              example:
+                error: Šis įrašas naudojamas kitur (pvz. valgymuose), todėl jo ištrinti negalima
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals:
+    get:
+      tags:
+      - Tikslai
+      summary: Tikslų sąrašas
+      description: |-
+        Paprastas naudotojas gauna tik savo tikslą, administratorius – visų naudotojų tikslus. Galima filtruoti pagal tipą ir pavadinimą.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: goals_list
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Puslapio numeris (numatytasis 1)
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Įrašų skaičius puslapyje (1–50, numatytasis 10)
+        schema:
+          type: integer
+      - name: type
+        in: query
+        required: false
+        description: weight_loss | maintain | muscle_gain
+        schema:
+          type: string
+      - name: search
+        in: query
+        required: false
+        description: Pavadinimo dalis
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Tikslų sąrašas su hipermedijos nuorodomis
+          content:
+            application/json:
+              example:
+                data:
+                - id: 1
+                  title: Mazinti svori
+                  type: weight_loss
+                  startWeightKg: 82
+                  targetWeightKg: 76
+                  heightCm: 178
+                  age: 24
+                  dailyCaloriesTarget: 1999
+                  dailyProteinTarget: 148
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  userId: 2
+                  _links:
+                    self: http://localhost:3000/api/goals/1
+                    logs: http://localhost:3000/api/goals/1/logs
+                    dashboard: http://localhost:3000/api/goals/1/dashboard
+                    reports: http://localhost:3000/api/goals/1/reports
+                    insights: http://localhost:3000/api/goals/1/insights
+                pagination:
+                  page: 1
+                  limit: 10
+                  total: 1
+                  pages: 1
+                _links:
+                  self: http://localhost:3000/api/goals?page=1&limit=10
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Tikslai
+      summary: Tikslo sukūrimas
+      description: |-
+        Sukuria prisijungusio naudotojo tikslą. Dienos kalorijų ir baltymų normos apskaičiuojamos automatiškai. Vienas naudotojas gali turėti vieną tikslą.
+
+        **Prieiga:** Prisijungęs naudotojas (Bearer žetonas)
+      operationId: goals_create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalInput'
+            example:
+              title: Auginti raumenis
+              type: muscle_gain
+              startWeightKg: 68
+              targetWeightKg: 73
+              heightCm: 180
+              age: 23
+      responses:
+        '201':
+          description: Tikslas sukurtas
+          content:
+            application/json:
+              example:
+                id: 6
+                title: Auginti raumenis
+                type: muscle_gain
+                startWeightKg: 68
+                targetWeightKg: 73
+                heightCm: 180
+                age: 23
+                dailyCaloriesTarget: 2631
+                dailyProteinTarget: 136
+                userId: 7
+                updatedAt: '2026-11-11T20:08:01.399Z'
+                createdAt: '2026-11-11T20:08:01.399Z'
+                _links:
+                  self: http://localhost:3000/api/goals/6
+                  logs: http://localhost:3000/api/goals/6/logs
+                  dashboard: http://localhost:3000/api/goals/6/dashboard
+                  reports: http://localhost:3000/api/goals/6/reports
+                  insights: http://localhost:3000/api/goals/6/insights
+        '409':
+          description: Naudotojas jau turi tikslą
+          content:
+            application/json:
+              example:
+                error: Jus jau turite tiksla. Vienam naudotojui leidziamas tik vienas tikslas.
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Trūksta privalomų laukų
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: startWeightKg, targetWeightKg, heightCm, age'
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}:
+    get:
+      tags:
+      - Tikslai
+      summary: Vienas tikslas
+      description: |-
+        Grąžina tikslą su nuorodomis į jo dienos įrašus, suvestinę ir ataskaitas.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: goals_get
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Tikslas
+          content:
+            application/json:
+              example:
+                id: 1
+                title: Mazinti svori
+                type: weight_loss
+                startWeightKg: 82
+                targetWeightKg: 76
+                heightCm: 178
+                age: 24
+                dailyCaloriesTarget: 1999
+                dailyProteinTarget: 148
+                createdAt: '2026-11-11T20:07:25.000Z'
+                updatedAt: '2026-11-11T20:07:25.000Z'
+                userId: 2
+                _links:
+                  self: http://localhost:3000/api/goals/1
+                  logs: http://localhost:3000/api/goals/1/logs
+                  dashboard: http://localhost:3000/api/goals/1/dashboard
+                  reports: http://localhost:3000/api/goals/1/reports
+                  insights: http://localhost:3000/api/goals/1/insights
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - Tikslai
+      summary: Tikslo redagavimas
+      description: |-
+        Atnaujina tikslą ir iš naujo apskaičiuoja kalorijų bei baltymų normas. Laukai userId ir id ignoruojami.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: goals_update
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalInput'
+            example:
+              targetWeightKg: 74
+      responses:
+        '200':
+          description: Tikslas atnaujintas
+          content:
+            application/json:
+              example:
+                id: 6
+                title: Auginti raumenis
+                type: muscle_gain
+                startWeightKg: 68
+                targetWeightKg: 74
+                heightCm: 180
+                age: 23
+                dailyCaloriesTarget: 2631
+                dailyProteinTarget: 136
+                createdAt: '2026-11-11T20:08:01.000Z'
+                updatedAt: '2026-11-11T20:08:01.407Z'
+                userId: 7
+                _links:
+                  self: http://localhost:3000/api/goals/6
+                  logs: http://localhost:3000/api/goals/6/logs
+                  dashboard: http://localhost:3000/api/goals/6/dashboard
+                  reports: http://localhost:3000/api/goals/6/reports
+                  insights: http://localhost:3000/api/goals/6/insights
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Tikslai
+      summary: Tikslo šalinimas
+      description: |-
+        Ištrina tikslą kartu su visais jo dienos įrašais ir valgymais.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: goals_delete
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Tikslas ištrintas
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/dashboard:
+    get:
+      tags:
+      - Tikslai
+      summary: Tikslo suvestinė
+      description: |-
+        Agreguoti duomenys iš kelių esybių (tikslas, dienos įrašai, valgymai, maisto produktai): dienų ir valgymų skaičius, vidutinės kalorijos ir baltymai per dieną, paskutiniai 5 valgymai.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: dashboard
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Suvestinė
+          content:
+            application/json:
+              example:
+                goal:
+                  id: 1
+                  title: Mazinti svori
+                  type: weight_loss
+                  startWeightKg: 82
+                  targetWeightKg: 76
+                  heightCm: 178
+                  age: 24
+                  dailyCaloriesTarget: 1999
+                  dailyProteinTarget: 148
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  userId: 2
+                summary:
+                  daysLogged: 7
+                  entriesLogged: 28
+                  totals:
+                    calories: 6583
+                    protein: 547.3
+                    carbs: 558.4
+                    fat: 232.9
+                  averageCaloriesPerDay: 940
+                  caloriesTarget: 1999
+                  averageProteinPerDay: 78.2
+                  proteinTarget: 148
+                recentEntries:
+                - id: 27
+                  mealType: dinner
+                  quantityGrams: 150
+                  eatenAt: '2026-11-11T19:00:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 7
+                  Food:
+                    id: 7
+                    name: Lašiša
+                    caloriesPer100g: 208
+                    proteinPer100g: 20
+                    carbsPer100g: 0
+                    fatPer100g: 13
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                  DailyLog:
+                    id: 7
+                    date: '2026-11-11'
+                    weightKg: 80.8
+                    activity: high
+                    note: Treniruotė sporto salėje
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                    goalId: 1
+                  eatenAtDate: '2026-11-11'
+                  eatenAtTime: '19:00'
+                  foodName: Lašiša
+                  totals:
+                    calories: 312
+                    protein: 30
+                    carbs: 0
+                    fat: 19.5
+                - id: 28
+                  mealType: snack
+                  quantityGrams: 150
+                  eatenAt: '2026-11-11T16:30:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 5
+                  Food:
+                    id: 5
+                    name: Obuolys
+                    caloriesPer100g: 52
+                    proteinPer100g: 0.3
+                    carbsPer100g: 14
+                    fatPer100g: 0.2
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                  DailyLog:
+                    id: 7
+                    date: '2026-11-11'
+                    weightKg: 80.8
+                    activity: high
+                    note: Treniruotė sporto salėje
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                    goalId: 1
+                  eatenAtDate: '2026-11-11'
+                  eatenAtTime: '16:30'
+                  foodName: Obuolys
+                  totals:
+                    calories: 78
+                    protein: 0.5
+                    carbs: 21
+                    fat: 0.3
+                _links:
+                  self: http://localhost:3000/api/goals/1
+                  logs: http://localhost:3000/api/goals/1/logs
+                  dashboard: http://localhost:3000/api/goals/1/dashboard
+                  reports: http://localhost:3000/api/goals/1/reports
+                  insights: http://localhost:3000/api/goals/1/insights
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/reports:
+    get:
+      tags:
+      - Tikslai
+      summary: Laikotarpio ataskaita
+      description: |-
+        Dienos, savaitės arba mėnesio ataskaita: kiekvienos dienos kalorijos ir maistinės medžiagos bei skirtumas nuo tikslo.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: reports
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: period
+        in: query
+        required: false
+        description: day | week | month (numatytasis day)
+        schema:
+          type: string
+      - name: date
+        in: query
+        required: false
+        description: Data YYYY-MM-DD (numatytoji – šiandien)
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ataskaita
+          content:
+            application/json:
+              example:
+                goal:
+                  id: 1
+                  title: Mazinti svori
+                  type: weight_loss
+                  startWeightKg: 82
+                  targetWeightKg: 76
+                  heightCm: 178
+                  age: 24
+                  dailyCaloriesTarget: 1999
+                  dailyProteinTarget: 148
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  userId: 2
+                report:
+                  period: week
+                  selectedDate: '2026-11-11'
+                  days:
+                  - date: '2026-11-09'
+                    weightKg: 81.2
+                    activity: high
+                    note: Bėgimas 5 km
+                    entries:
+                    - id: 17
+                      mealType: breakfast
+                      quantityGrams: 200
+                      eatenAt: '2026-11-09T08:15:00.000Z'
+                      createdAt: '2026-11-11T20:07:25.000Z'
+                      updatedAt: '2026-11-11T20:07:25.000Z'
+                      dailyLogId: 5
+                      foodId: 4
+                      Food:
+                        id: 4
+                        name: Varškė 9%
+                        caloriesPer100g: 159
+                        proteinPer100g: 16
+                        carbsPer100g: 2
+                        fatPer100g: 9
+                        createdAt: '2026-11-11T20:07:25.000Z'
+                        updatedAt: '2026-11-11T20:07:25.000Z'
+                      DailyLog:
+                        id: 5
+                        date: '2026-11-09'
+                        weightKg: 81.2
+                        activity: high
+                        note: Bėgimas 5 km
+                        createdAt: '2026-11-11T20:07:25.000Z'
+                        updatedAt: '2026-11-11T20:07:25.000Z'
+                        goalId: 1
+                      eatenAtDate: '2026-11-09'
+                      eatenAtTime: 08:15
+                      foodName: Varškė 9%
+                      totals:
+                        calories: 318
+                        protein: 32
+                        carbs: 4
+                        fat: 18
+                    totals:
+                      calories: 753
+                      protein: 44.3
+                      carbs: 101.6
+                      fat: 19.8
+                    caloriesDifference: -1246
+                  summary:
+                    days: 3
+                    totals:
+                      calories: 2800
+                      protein: 225.3
+                      carbs: 244.7
+                      fat: 100.5
+                    targets:
+                      calories: 5997
+                      protein: 444
+                    difference:
+                      calories: -3197
+                      protein: -218.7
+                    averageCalories: 933
+                    caloriesTarget: 5997
+                _links:
+                  self: http://localhost:3000/api/goals/1/reports?period=week&date=2026-11-11
+                  goal: http://localhost:3000/api/goals/1
+                  insights: http://localhost:3000/api/goals/1/insights
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/insights:
+    post:
+      tags:
+      - Tikslai
+      summary: DI įžvalga
+      description: |-
+        Pagal pasirinkto laikotarpio ataskaitą sugeneruoja tekstinę įžvalgą per Google Gemini API. Jei DI paslauga nepasiekiama, grąžinama taisyklėmis paremta santrauka.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: insights
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: period
+        in: query
+        required: false
+        description: day | week | month
+        schema:
+          type: string
+      - name: date
+        in: query
+        required: false
+        description: Data YYYY-MM-DD
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Įžvalgos tekstas
+          content:
+            application/json:
+              example:
+                goalId: 1
+                insight: |-
+                  Pasirinkto savaites laikotarpio santrauka: 2800 kcal, 225.3 g baltymu, 244.7 g angliavandeniu ir 100.5 g riebalu.
+
+                  Per pasirinkta laikotarpi suvartota apie 15191 kcal maziau nei tikslas.
+
+                  Baltymu kiekis zemokas: 225.3 g is mazdaug 444 g laikotarpio tikslo.
+
+                  Duomenu yra 3 dienoms, todel verta ziureti ne viena diena, o bendra tendencija.
+
+                  Rekomendacijos: planuok pagrindinius valgymus is anksto, prie kiekvieno pagrindinio valgymo pridek baltymu saltini, o uzkandzius naudok tik tarpams uzpildyti, ne pagrindiniam kaloriju kiekiui surinkti.
+
+                  Kitam laikotarpiui verta stebeti, ar kaloriju skirtumas kartojasi kasdien, ir pagal tai koreguoti porciju dydi, o ne pavienius atsitiktinius valgymus.
+                _links:
+                  self: http://localhost:3000/api/goals/1/insights?period=week&date=2026-11-11
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/logs:
+    get:
+      tags:
+      - Dienos įrašai
+      summary: Tikslo dienos įrašų sąrašas
+      description: |-
+        Grąžina tikslo dienos įrašus (naujausi pirmi). Galima filtruoti pagal datą ir aktyvumą.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: logs_list
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: page
+        in: query
+        required: false
+        description: Puslapio numeris (numatytasis 1)
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Įrašų skaičius puslapyje (1–50, numatytasis 10)
+        schema:
+          type: integer
+      - name: date
+        in: query
+        required: false
+        description: Data YYYY-MM-DD
+        schema:
+          type: string
+      - name: activity
+        in: query
+        required: false
+        description: low | medium | high
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Dienos įrašų sąrašas
+          content:
+            application/json:
+              example:
+                data:
+                - id: 7
+                  date: '2026-11-11'
+                  weightKg: 80.8
+                  activity: high
+                  note: Treniruotė sporto salėje
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  goalId: 1
+                  _links:
+                    self: http://localhost:3000/api/goals/1/logs/7
+                    goal: http://localhost:3000/api/goals/1
+                    entries: http://localhost:3000/api/goals/1/logs/7/entries
+                - id: 6
+                  date: '2026-11-10'
+                  weightKg: 81
+                  activity: low
+                  note: Ramus poilsio vakaras
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  goalId: 1
+                  _links:
+                    self: http://localhost:3000/api/goals/1/logs/6
+                    goal: http://localhost:3000/api/goals/1
+                    entries: http://localhost:3000/api/goals/1/logs/6/entries
+                pagination:
+                  page: 1
+                  limit: 2
+                  total: 7
+                  pages: 4
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs?page=1&limit=2
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Dienos įrašai
+      summary: Dienos įrašo sukūrimas
+      description: |-
+        Sukuria dienos įrašą (svoris, aktyvumas, komentaras). Vienai datai leidžiamas vienas įrašas.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: logs_create
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyLogInput'
+            example:
+              date: '2026-10-01'
+              weightKg: 81.5
+              activity: medium
+              note: Pirmoji diena
+      responses:
+        '201':
+          description: Dienos įrašas sukurtas
+          content:
+            application/json:
+              example:
+                id: 28
+                date: '2026-10-01'
+                weightKg: 81.5
+                activity: medium
+                note: Pirmoji diena
+                goalId: 1
+                updatedAt: '2026-11-11T20:08:01.548Z'
+                createdAt: '2026-11-11T20:08:01.548Z'
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/28
+                  goal: http://localhost:3000/api/goals/1
+                  entries: http://localhost:3000/api/goals/1/logs/28/entries
+        '409':
+          description: Šiai dienai įrašas jau yra
+          content:
+            application/json:
+              example:
+                error: Siai dienai dienos irasas jau sukurtas.
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Trūksta datos arba netinkamas aktyvumas
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: date'
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tikslas nerastas
+          content:
+            application/json:
+              example:
+                error: Tikslas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/logs/{logId}:
+    get:
+      tags:
+      - Dienos įrašai
+      summary: Vienas dienos įrašas
+      description: |-
+        Grąžina dienos įrašą su nuorodomis į tikslą ir valgymus.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: logs_get
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Dienos įrašas
+          content:
+            application/json:
+              example:
+                id: 7
+                date: '2026-11-11'
+                weightKg: 80.8
+                activity: high
+                note: Treniruotė sporto salėje
+                createdAt: '2026-11-11T20:07:25.000Z'
+                updatedAt: '2026-11-11T20:07:25.000Z'
+                goalId: 1
+                FoodEntries:
+                - id: 25
+                  mealType: breakfast
+                  quantityGrams: 80
+                  eatenAt: '2026-11-11T08:00:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 1
+                  Food:
+                    id: 1
+                    name: Avižiniai dribsniai
+                    caloriesPer100g: 370
+                    proteinPer100g: 13
+                    carbsPer100g: 60
+                    fatPer100g: 7
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                - id: 26
+                  mealType: lunch
+                  quantityGrams: 180
+                  eatenAt: '2026-11-11T13:00:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 2
+                  Food:
+                    id: 2
+                    name: Vištienos krūtinėlė
+                    caloriesPer100g: 165
+                    proteinPer100g: 31
+                    carbsPer100g: 0
+                    fatPer100g: 3.6
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/7
+                  goal: http://localhost:3000/api/goals/1
+                  entries: http://localhost:3000/api/goals/1/logs/7/entries
+        '404':
+          description: Dienos įrašas nerastas nurodytame tiksle
+          content:
+            application/json:
+              example:
+                error: Dienos irasas nerastas tame tiksle
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - Dienos įrašai
+      summary: Dienos įrašo redagavimas
+      description: |-
+        Atnaujina svorį, aktyvumą, komentarą ar datą. Laukas goalId ignoruojamas.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: logs_update
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyLogInput'
+            example:
+              weightKg: 81.2
+              note: Pataisytas svoris
+      responses:
+        '200':
+          description: Dienos įrašas atnaujintas
+          content:
+            application/json:
+              example:
+                id: 28
+                date: '2026-10-01'
+                weightKg: 81.2
+                activity: medium
+                note: Pataisytas svoris
+                createdAt: '2026-11-11T20:08:01.000Z'
+                updatedAt: '2026-11-11T20:08:01.558Z'
+                goalId: 1
+                FoodEntries: []
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/28
+                  goal: http://localhost:3000/api/goals/1
+                  entries: http://localhost:3000/api/goals/1/logs/28/entries
+        '404':
+          description: Dienos įrašas nerastas nurodytame tiksle
+          content:
+            application/json:
+              example:
+                error: Dienos irasas nerastas tame tiksle
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Dienos įrašai
+      summary: Dienos įrašo šalinimas
+      description: |-
+        Ištrina dienos įrašą kartu su tos dienos valgymais.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: logs_delete
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Dienos įrašas ištrintas
+        '404':
+          description: Dienos įrašas nerastas nurodytame tiksle
+          content:
+            application/json:
+              example:
+                error: Dienos irasas nerastas tame tiksle
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/logs/{logId}/entries:
+    get:
+      tags:
+      - Valgymai
+      summary: Dienos valgymų sąrašas
+      description: |-
+        Hierarchinis kelias per visus tris objektus (tikslas → dienos įrašas → valgymas). Kiekvienam valgymui apskaičiuojamos kalorijos ir maistinės medžiagos pagal kiekį.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: entries_list
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      - name: page
+        in: query
+        required: false
+        description: Puslapio numeris (numatytasis 1)
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Įrašų skaičius puslapyje (1–50, numatytasis 10)
+        schema:
+          type: integer
+      - name: mealType
+        in: query
+        required: false
+        description: breakfast | lunch | dinner | snack
+        schema:
+          type: string
+      - name: date
+        in: query
+        required: false
+        description: Valgymo data YYYY-MM-DD
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Valgymų sąrašas
+          content:
+            application/json:
+              example:
+                data:
+                - id: 25
+                  mealType: breakfast
+                  quantityGrams: 80
+                  eatenAt: '2026-11-11T08:00:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 1
+                  Food:
+                    id: 1
+                    name: Avižiniai dribsniai
+                    caloriesPer100g: 370
+                    proteinPer100g: 13
+                    carbsPer100g: 60
+                    fatPer100g: 7
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                  DailyLog:
+                    id: 7
+                    date: '2026-11-11'
+                  eatenAtDate: '2026-11-11'
+                  eatenAtTime: 08:00
+                  foodName: Avižiniai dribsniai
+                  totals:
+                    calories: 296
+                    protein: 10.4
+                    carbs: 48
+                    fat: 5.6
+                  _links:
+                    self: http://localhost:3000/api/goals/1/logs/7/entries/25
+                    log: http://localhost:3000/api/goals/1/logs/7/entries
+                - id: 26
+                  mealType: lunch
+                  quantityGrams: 180
+                  eatenAt: '2026-11-11T13:00:00.000Z'
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  dailyLogId: 7
+                  foodId: 2
+                  Food:
+                    id: 2
+                    name: Vištienos krūtinėlė
+                    caloriesPer100g: 165
+                    proteinPer100g: 31
+                    carbsPer100g: 0
+                    fatPer100g: 3.6
+                    createdAt: '2026-11-11T20:07:25.000Z'
+                    updatedAt: '2026-11-11T20:07:25.000Z'
+                  DailyLog:
+                    id: 7
+                    date: '2026-11-11'
+                  eatenAtDate: '2026-11-11'
+                  eatenAtTime: '13:00'
+                  foodName: Vištienos krūtinėlė
+                  totals:
+                    calories: 297
+                    protein: 55.8
+                    carbs: 0
+                    fat: 6.5
+                  _links:
+                    self: http://localhost:3000/api/goals/1/logs/7/entries/26
+                    log: http://localhost:3000/api/goals/1/logs/7/entries
+                pagination:
+                  page: 1
+                  limit: 2
+                  total: 4
+                  pages: 2
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/7/entries?page=1&limit=2
+        '404':
+          description: Dienos įrašas nerastas nurodytame tiksle
+          content:
+            application/json:
+              example:
+                error: Dienos irasas nerastas tame tiksle
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Valgymai
+      summary: Valgymo įrašo sukūrimas
+      description: |-
+        Prideda valgymą: produktas iš katalogo, kiekis gramais, valgymo tipas ir laikas. Pusryčiai, pietūs ir vakarienė per dieną gali būti tik po vieną, užkandžių – kiek reikia.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: entries_create
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodEntryInput'
+            example:
+              foodId: 3
+              mealType: lunch
+              quantityGrams: 150
+              eatenAt: '2026-10-01 13:00:00'
+      responses:
+        '201':
+          description: Valgymas pridėtas
+          content:
+            application/json:
+              example:
+                id: 109
+                mealType: lunch
+                quantityGrams: 150
+                eatenAt: '2026-10-01T13:00:00.000Z'
+                createdAt: '2026-11-11T20:08:01.000Z'
+                updatedAt: '2026-11-11T20:08:01.000Z'
+                dailyLogId: 28
+                foodId: 3
+                Food:
+                  id: 3
+                  name: Grikiai
+                  caloriesPer100g: 343
+                  proteinPer100g: 13
+                  carbsPer100g: 72
+                  fatPer100g: 3.4
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                eatenAtDate: '2026-10-01'
+                eatenAtTime: '13:00'
+                foodName: Grikiai
+                totals:
+                  calories: 515
+                  protein: 19.5
+                  carbs: 108
+                  fat: 5.1
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/28/entries/109
+                  log: http://localhost:3000/api/goals/1/logs/28/entries
+        '409':
+          description: Toks pagrindinis valgymas šią dieną jau yra
+          content:
+            application/json:
+              example:
+                error: Siai dienai toks valgymas jau uzfiksuotas. Pakartotinai galima prideti tik uzkandi.
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Trūksta produkto, tipo arba kiekio
+          content:
+            application/json:
+              example:
+                error: 'Truksta lauku: foodId, quantityGrams'
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Dienos įrašas nerastas nurodytame tiksle
+          content:
+            application/json:
+              example:
+                error: Dienos irasas nerastas tame tiksle
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /goals/{goalId}/logs/{logId}/entries/{entryId}:
+    get:
+      tags:
+      - Valgymai
+      summary: Vienas valgymo įrašas
+      description: |-
+        Grąžina valgymą su produkto informacija ir apskaičiuotomis maistinėmis vertėmis.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: entries_get
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      - name: entryId
+        in: path
+        required: true
+        description: Valgymo įrašo ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Valgymo įrašas
+          content:
+            application/json:
+              example:
+                id: 25
+                mealType: breakfast
+                quantityGrams: 80
+                eatenAt: '2026-11-11T08:00:00.000Z'
+                createdAt: '2026-11-11T20:07:25.000Z'
+                updatedAt: '2026-11-11T20:07:25.000Z'
+                dailyLogId: 7
+                foodId: 1
+                Food:
+                  id: 1
+                  name: Avižiniai dribsniai
+                  caloriesPer100g: 370
+                  proteinPer100g: 13
+                  carbsPer100g: 60
+                  fatPer100g: 7
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                DailyLog:
+                  id: 7
+                  date: '2026-11-11'
+                  weightKg: 80.8
+                  activity: high
+                  note: Treniruotė sporto salėje
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  goalId: 1
+                eatenAtDate: '2026-11-11'
+                eatenAtTime: 08:00
+                foodName: Avižiniai dribsniai
+                totals:
+                  calories: 296
+                  protein: 10.4
+                  carbs: 48
+                  fat: 5.6
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/7/entries/25
+                  log: http://localhost:3000/api/goals/1/logs/7/entries
+        '404':
+          description: Valgymo įrašas nerastas nurodytame dienos įraše
+          content:
+            application/json:
+              example:
+                error: Maisto irasas nerastas tame dienos irase
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - Valgymai
+      summary: Valgymo įrašo redagavimas
+      description: |-
+        Atnaujina produktą, kiekį, tipą ar laiką. Laukas dailyLogId ignoruojamas.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: entries_update
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      - name: entryId
+        in: path
+        required: true
+        description: Valgymo įrašo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodEntryInput'
+            example:
+              quantityGrams: 180
+      responses:
+        '200':
+          description: Valgymas atnaujintas
+          content:
+            application/json:
+              example:
+                id: 109
+                mealType: lunch
+                quantityGrams: 180
+                eatenAt: '2026-10-01T13:00:00.000Z'
+                createdAt: '2026-11-11T20:08:01.000Z'
+                updatedAt: '2026-11-11T20:08:01.000Z'
+                dailyLogId: 28
+                foodId: 3
+                Food:
+                  id: 3
+                  name: Grikiai
+                  caloriesPer100g: 343
+                  proteinPer100g: 13
+                  carbsPer100g: 72
+                  fatPer100g: 3.4
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                eatenAtDate: '2026-10-01'
+                eatenAtTime: '13:00'
+                foodName: Grikiai
+                totals:
+                  calories: 617
+                  protein: 23.4
+                  carbs: 129.6
+                  fat: 6.1
+                _links:
+                  self: http://localhost:3000/api/goals/1/logs/28/entries/109
+                  log: http://localhost:3000/api/goals/1/logs/28/entries
+        '404':
+          description: Valgymo įrašas nerastas nurodytame dienos įraše
+          content:
+            application/json:
+              example:
+                error: Maisto irasas nerastas tame dienos irase
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Valgymai
+      summary: Valgymo įrašo šalinimas
+      description: |-
+        Ištrina valgymo įrašą.
+
+        **Prieiga:** Tikslo savininkas arba administratorius (Bearer žetonas)
+      operationId: entries_delete
+      parameters:
+      - name: goalId
+        in: path
+        required: true
+        description: Tikslo ID
+        schema:
+          type: integer
+      - name: logId
+        in: path
+        required: true
+        description: Dienos įrašo ID
+        schema:
+          type: integer
+      - name: entryId
+        in: path
+        required: true
+        description: Valgymo įrašo ID
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Valgymas ištrintas
+        '404':
+          description: Valgymo įrašas nerastas nurodytame dienos įraše
+          content:
+            application/json:
+              example:
+                error: Maisto irasas nerastas tame dienos irase
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tikslas priklauso kitam naudotojui
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam tikslui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users:
+    get:
+      tags:
+      - Naudotojai
+      summary: Naudotojų sąrašas
+      description: |-
+        Visų naudotojų sąrašas su puslapiavimu (be slaptažodžių maišų).
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: users_list
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Puslapio numeris (numatytasis 1)
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        description: Įrašų skaičius puslapyje (1–50, numatytasis 10)
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Naudotojų sąrašas
+          content:
+            application/json:
+              example:
+                data:
+                - id: 1
+                  email: admin@example.com
+                  role: admin
+                  createdAt: '2026-11-11T20:07:24.000Z'
+                - id: 2
+                  email: vartotojas1@example.com
+                  role: user
+                  createdAt: '2026-11-11T20:07:24.000Z'
+                pagination:
+                  page: 1
+                  limit: 2
+                  total: 7
+                  pages: 4
+        '403':
+          description: Naudotojo rolė neturi teisės atlikti šio veiksmo
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/{userId}:
+    get:
+      tags:
+      - Naudotojai
+      summary: Naudotojo informacija
+      description: |-
+        Naudotojo duomenys kartu su jo tikslu.
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: users_get
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        description: Naudotojo ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Naudotojas ir jo tikslas
+          content:
+            application/json:
+              example:
+                id: 2
+                email: vartotojas1@example.com
+                role: user
+                createdAt: '2026-11-11T20:07:24.000Z'
+                goal:
+                  id: 1
+                  title: Mazinti svori
+                  type: weight_loss
+                  startWeightKg: 82
+                  targetWeightKg: 76
+                  heightCm: 178
+                  age: 24
+                  dailyCaloriesTarget: 1999
+                  dailyProteinTarget: 148
+                  createdAt: '2026-11-11T20:07:25.000Z'
+                  updatedAt: '2026-11-11T20:07:25.000Z'
+                  userId: 2
+        '404':
+          description: Naudotojas nerastas
+          content:
+            application/json:
+              example:
+                error: Naudotojas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Naudotojo rolė neturi teisės atlikti šio veiksmo
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - Naudotojai
+      summary: Naudotojo redagavimas
+      description: |-
+        Keičia naudotojo rolę, el. paštą arba slaptažodį.
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: users_update
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        description: Naudotojo ID
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+            example:
+              role: admin
+      responses:
+        '200':
+          description: Naudotojas atnaujintas
+          content:
+            application/json:
+              example:
+                id: 7
+                email: naujas@example.com
+                role: admin
+        '422':
+          description: Netinkama rolė
+          content:
+            application/json:
+              example:
+                error: Netinkama role
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Naudotojas nerastas
+          content:
+            application/json:
+              example:
+                error: Naudotojas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Naudotojo rolė neturi teisės atlikti šio veiksmo
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Naudotojai
+      summary: Naudotojo šalinimas
+      description: |-
+        Ištrina naudotoją ir visus jo duomenis. Administratorius negali ištrinti savo paskyros.
+
+        **Prieiga:** Tik administratorius (Bearer žetonas)
+      operationId: users_delete
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        description: Naudotojo ID
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Naudotojas ištrintas
+        '409':
+          description: Bandoma ištrinti savo paskyrą
+          content:
+            application/json:
+              example:
+                error: Negalite istrinti savo paskyros
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Naudotojas nerastas
+          content:
+            application/json:
+              example:
+                error: Naudotojas nerastas
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Naudotojo rolė neturi teisės atlikti šio veiksmo
+          content:
+            application/json:
+              example:
+                error: Neturite teisiu siam veiksmui
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Nepateiktas arba negaliojantis prieigos žetonas
+          content:
+            application/json:
+              example:
+                error: Trukstą prisijungimo zetono
+              schema:
+                $ref: '#/components/schemas/Error'
+  /health:
+    get:
+      tags:
+      - Sistema
+      summary: Serverio būsena
+      description: |-
+        Patikrina, ar API veikia.
+
+        **Prieiga:** Nereikia
+      operationId: health
+      security: []
+      responses:
+        '200':
+          description: Serveris veikia
+          content:
+            application/json:
+              example:
+                status: OK
+                service: fitness-tracker-backend
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Prieigos žetonas iš /auth/login arba /auth/refresh. Payload: sub (naudotojo ID), role, iat, exp.'
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      example:
+        error: Tikslas nerastas
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer
+    Credentials:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT, galioja 15 min.
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+          enum:
+          - user
+          - admin
+    FoodInput:
+      type: object
+      required:
+      - name
+      - caloriesPer100g
+      properties:
+        name:
+          type: string
+        caloriesPer100g:
+          type: number
+        proteinPer100g:
+          type: number
+        carbsPer100g:
+          type: number
+        fatPer100g:
+          type: number
+    GoalInput:
+      type: object
+      required:
+      - title
+      - type
+      - startWeightKg
+      - targetWeightKg
+      - heightCm
+      - age
+      properties:
+        title:
+          type: string
+          enum:
+          - Mazinti svori
+          - Auginti raumenis
+          - Islaikyti svori
+        type:
+          type: string
+          enum:
+          - weight_loss
+          - muscle_gain
+          - maintain
+        startWeightKg:
+          type: number
+        targetWeightKg:
+          type: number
+        heightCm:
+          type: integer
+        age:
+          type: integer
+    DailyLogInput:
+      type: object
+      required:
+      - date
+      properties:
+        date:
+          type: string
+          format: date
+        weightKg:
+          type: number
+        activity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+        note:
+          type: string
+    FoodEntryInput:
+      type: object
+      required:
+      - foodId
+      - mealType
+      - quantityGrams
+      properties:
+        foodId:
+          type: integer
+        mealType:
+          type: string
+          enum:
+          - breakfast
+          - lunch
+          - dinner
+          - snack
+        quantityGrams:
+          type: number
+        eatenAt:
+          type: string
+          example: '2026-10-01 13:00:00'
+    UserUpdate:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+          - user
+          - admin
+        email:
+          type: string
+        password:
+          type: string

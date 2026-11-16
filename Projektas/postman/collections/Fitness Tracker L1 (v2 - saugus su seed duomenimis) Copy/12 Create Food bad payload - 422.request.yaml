@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/foods"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"name":"Nepilnas irasas"}'
+scripts:
+  - type: afterResponse
+    code: pm.test('422 - truksta caloriesPer100g', () => pm.response.to.have.status(422));
+    language: text/javascript
+order: 12000

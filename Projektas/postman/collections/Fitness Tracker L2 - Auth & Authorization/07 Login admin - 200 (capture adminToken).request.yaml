@@ -1,0 +1,22 @@
+$kind: http-request
+description: Prisijungia administratorius. Is atsakymo issaugomas access tokenas (adminToken) ir admin ID - jie naudojami tolimesniuose testuose.
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"email": "admin@example.com", "password": "Admin123!"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Prisijungia administratorius. Is atsakymo issaugomas access tokenas (adminToken) ir admin ID - jie naudojami tolimesniuose testuose.
+      {
+      pm.test('200 - prisijungta', () => pm.response.to.have.status(200));
+      const data = pm.response.json();
+      pm.collectionVariables.set('adminToken', data.accessToken);
+      pm.collectionVariables.set('adminUserId', data.user.id);
+      pm.test('role admin', () => pm.expect(data.user.role).to.eql('admin'));
+      }
+    language: text/javascript
+order: 7000

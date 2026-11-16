@@ -1,0 +1,19 @@
+$kind: http-request
+name: "27 Admin: Update user role - 200"
+description: Administratorius pakeicia 02 teste sukurto naudotojo role i 'admin'. Roles keisti gali tik admin.
+url: "{{baseUrl}}/users/{{newUserId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: '{"role": "admin"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Administratorius pakeicia 02 teste sukurto naudotojo role i 'admin'. Roles keisti gali tik admin.
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('role pasikeite', () => pm.expect(pm.response.json().role).to.eql('admin'));
+    language: text/javascript
+order: 27000

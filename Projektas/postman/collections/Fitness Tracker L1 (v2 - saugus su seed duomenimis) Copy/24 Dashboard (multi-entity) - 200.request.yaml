@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{baseUrl}}/goals/{{goalId}}/dashboard"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('has summary', () => pm.expect(pm.response.json()).to.have.property('summary'));
+    language: text/javascript
+order: 24000

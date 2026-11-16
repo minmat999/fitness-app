@@ -1,0 +1,983 @@
+{
+  "info": {
+    "name": "Fitness Tracker L2 - Auth & Authorization",
+    "description": "L2 testai: registracija, prisijungimas, JWT tokenai, refresh/logout, autorizacija pagal role ir pagal savininka (ID), apsauga nuo teisiu eskalacijos. Paleisti per Runner is eiles (testai naudoja vienas kito issaugotus kintamuosius). Reikia seed naudotoju is backend/scripts/seedUsers.js.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "adminUserId",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "user1Id",
+      "value": ""
+    },
+    {
+      "key": "user2Token",
+      "value": ""
+    },
+    {
+      "key": "goalId",
+      "value": ""
+    },
+    {
+      "key": "foodId",
+      "value": ""
+    },
+    {
+      "key": "userFoodId",
+      "value": ""
+    },
+    {
+      "key": "newUserEmail",
+      "value": ""
+    },
+    {
+      "key": "newUserId",
+      "value": ""
+    },
+    {
+      "key": "hackUserId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health - 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health",
+        "description": "Patikrina, ar serveris veikia. Sis kelias viesas - tokeno nereikia."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Patikrina, ar serveris veikia. Sis kelias viesas - tokeno nereikia.",
+              "pm.test('200 - serveris veikia', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Register new user - 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Uzregistruoja nauja naudotoja. El. pastas unikalus kiekviena karta ({{$timestamp}}), todel kolekcija galima leisti kelis kartus. Tikrinama, kad nauja paskyra visada gauna role 'user'.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"temp_{{$timestamp}}@example.com\", \"password\": \"Temp123!\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Uzregistruoja nauja naudotoja. El. pastas unikalus kiekviena karta ({{$timestamp}}), todel kolekcija galima leisti kelis kartus. Tikrinama, kad nauja paskyra visada gauna role 'user'.",
+              "{",
+              "pm.test('201 - naudotojas sukurtas', () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.test('role visada user', () => pm.expect(data.role).to.eql('user'));",
+              "// Issaugome, kad 03 testas galetu bandyti ta pati el. pasta, o 27-29 testai - keisti ir trinti si naudotoja.",
+              "pm.collectionVariables.set('newUserEmail', data.email);",
+              "pm.collectionVariables.set('newUserId', data.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Register duplicate email - 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Bando registruotis su tuo paciu el. pastu kaip 02 teste. Serveris turi atsakyti 409 Conflict - toks naudotojas jau yra.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{newUserEmail}}\", \"password\": \"Kitas123!\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Bando registruotis su tuo paciu el. pastu kaip 02 teste. Serveris turi atsakyti 409 Conflict - toks naudotojas jau yra.",
+              "pm.test('409 - el. pastas jau uzimtas', () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Register missing password - 422",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Registracija be slaptazodzio. Serveris turi atsakyti 422 - truksta privalomo lauko.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"nepilnas@example.com\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Registracija be slaptazodzio. Serveris turi atsakyti 422 - truksta privalomo lauko.",
+              "pm.test('422 - truksta slaptazodzio', () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Try role escalation on register - 201 (role ignored)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Saugumo testas: bandoma uzsiregistruoti su role 'admin'. Serveris paskyra sukuria, bet role IGNORUOJA - naujas naudotojas vis tiek 'user'. Taip apsisaugoma nuo teisiu eskalacijos.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"hack_{{$timestamp}}@example.com\", \"password\": \"Hack123!\", \"role\": \"admin\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Saugumo testas: bandoma uzsiregistruoti su role 'admin'. Serveris paskyra sukuria, bet role IGNORUOJA - naujas naudotojas vis tiek 'user'. Taip apsisaugoma nuo teisiu eskalacijos.",
+              "{",
+              "pm.test('201 - paskyra sukurta', () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.test('role vis tiek user, ne admin', () => pm.expect(data.role).to.eql('user'));",
+              "// Issaugome ID, kad testo pabaigoje admin istrintu si naudotoja (DB liktu svari).",
+              "pm.collectionVariables.set('hackUserId', data.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Login WRONG password - 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Prisijungimas su neteisingu slaptazodziu. Serveris turi atsakyti 401 Unauthorized ir neisduoti tokeno.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"admin@example.com\", \"password\": \"neteisingas\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Prisijungimas su neteisingu slaptazodziu. Serveris turi atsakyti 401 Unauthorized ir neisduoti tokeno.",
+              "pm.test('401 - neteisingas slaptazodis', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Login admin - 200 (capture adminToken)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Prisijungia administratorius. Is atsakymo issaugomas access tokenas (adminToken) ir admin ID - jie naudojami tolimesniuose testuose.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"admin@example.com\", \"password\": \"Admin123!\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Prisijungia administratorius. Is atsakymo issaugomas access tokenas (adminToken) ir admin ID - jie naudojami tolimesniuose testuose.",
+              "{",
+              "pm.test('200 - prisijungta', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set('adminToken', data.accessToken);",
+              "pm.collectionVariables.set('adminUserId', data.user.id);",
+              "pm.test('role admin', () => pm.expect(data.user.role).to.eql('admin'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Me (admin) - 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/me",
+        "description": "Grazina prisijungusio naudotojo duomenis. Serveris ID ir role suzino IS TOKENO (ne is body), todel atsakymas parodo, kas yra tokene."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Grazina prisijungusio naudotojo duomenis. Serveris ID ir role suzino IS TOKENO (ne is body), todel atsakymas parodo, kas yra tokene.",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('tokenas priklauso adminui', () => {",
+              "  pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('adminUserId')));",
+              "  pm.expect(pm.response.json().role).to.eql('admin');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 No token on protected route - 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/goals",
+        "description": "Kreipiamasi i apsaugota kelia BE Authorization antrastes. Serveris turi atsakyti 401 - neprisijungusiems prieiga uzdrausta."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Kreipiamasi i apsaugota kelia BE Authorization antrastes. Serveris turi atsakyti 401 - neprisijungusiems prieiga uzdrausta.",
+              "pm.test('401 - truksta zetono', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Garbage token - 401",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer sugadintas.tokenas.123"
+          }
+        ],
+        "url": "{{baseUrl}}/goals",
+        "description": "Kreipiamasi su suklastotu/sugadintu tokenu. jwt.verify nepavyksta patikrinti parašo, todel serveris atsako 401."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Kreipiamasi su suklastotu/sugadintu tokenu. jwt.verify nepavyksta patikrinti parašo, todel serveris atsako 401.",
+              "pm.test('401 - negaliojantis zetonas', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Login vartotojas1 - 200 (capture userToken)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Prisijungia paprastas naudotojas vartotojas1. Issaugomas jo tokenas (userToken) ir ID (user1Id). Kartu serveris nustato refresh cookie (naudojamas 19 teste).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"vartotojas1@example.com\", \"password\": \"Vartotojas123!\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Prisijungia paprastas naudotojas vartotojas1. Issaugomas jo tokenas (userToken) ir ID (user1Id). Kartu serveris nustato refresh cookie (naudojamas 19 teste).",
+              "{",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set('userToken', data.accessToken);",
+              "pm.collectionVariables.set('user1Id', data.user.id);",
+              "pm.test('role user', () => pm.expect(data.user.role).to.eql('user'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 List Goals (user1, mato tik savo) - 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals",
+        "description": "Paprastas naudotojas gauna tikslu sarasa. Jis turi matyti TIK SAVO tikslus. Pirmo tikslo ID issaugomas (goalId)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Paprastas naudotojas gauna tikslu sarasa. Jis turi matyti TIK SAVO tikslus. Pirmo tikslo ID issaugomas (goalId).",
+              "{",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "if (data.data.length) pm.collectionVariables.set('goalId', data.data[0].id);",
+              "pm.test('visi tikslai priklauso vartotojas1', () => {",
+              "  data.data.forEach(g => pm.expect(g.userId).to.eql(Number(pm.collectionVariables.get('user1Id'))));",
+              "});",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 List Goals (admin, mato VISUS) - 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals",
+        "description": "Administratorius gauna tikslu sarasa - jis mato visu naudotoju tikslus (daugiau nei 1)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius gauna tikslu sarasa - jis mato visu naudotoju tikslus (daugiau nei 1).",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('admin mato daugiau nei 1 tiksla', () => pm.expect(pm.response.json().data.length).to.be.above(1));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Create SECOND Goal (user1 jau turi) - 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals",
+        "description": "vartotojas1 jau turi tiksla, o vienam naudotojui leidziamas tik vienas. Serveris turi atsakyti 409 Conflict.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Mazinti svori\", \"type\": \"weight_loss\", \"startWeightKg\": 80, \"targetWeightKg\": 75, \"heightCm\": 175, \"age\": 25}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// vartotojas1 jau turi tiksla, o vienam naudotojui leidziamas tik vienas. Serveris turi atsakyti 409 Conflict.",
+              "pm.test('409 - vienam vartotojui tik vienas tikslas', () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Create Food as regular user - 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/foods",
+        "description": "Paprastas naudotojas prideda nauja maista i kataloga. Tai leidziama visiems prisijungusiems (kad galetu zymeti, ka valge). Sukurto maisto ID issaugomas (userFoodId).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"Vartotojo testinis maistas\", \"caloriesPer100g\": 100, \"proteinPer100g\": 5, \"carbsPer100g\": 15, \"fatPer100g\": 2}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Paprastas naudotojas prideda nauja maista i kataloga. Tai leidziama visiems prisijungusiems (kad galetu zymeti, ka valge). Sukurto maisto ID issaugomas (userFoodId).",
+              "pm.test('201 - naudotojas gali prideti maista', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('userFoodId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Delete Food as regular user - 403",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/foods/{{userFoodId}}",
+        "description": "Paprastas naudotojas bando istrinti maista is katalogo. Trinti ir redaguoti kataloga gali TIK admin (authorize('admin')), todel atsakymas 403 Forbidden."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Paprastas naudotojas bando istrinti maista is katalogo. Trinti ir redaguoti kataloga gali TIK admin (authorize('admin')), todel atsakymas 403 Forbidden.",
+              "pm.test('403 - tik admin gali trinti maista', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Create Food as admin - 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/foods",
+        "description": "Administratorius prideda maista i kataloga. Sukurto maisto ID issaugomas (foodId), kad pabaigoje butu istrintas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"L2 testinis maistas\", \"caloriesPer100g\": 180, \"proteinPer100g\": 12, \"carbsPer100g\": 10, \"fatPer100g\": 6}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius prideda maista i kataloga. Sukurto maisto ID issaugomas (foodId), kad pabaigoje butu istrintas.",
+              "pm.test('201', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('foodId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 Try move own Goal to other user via PUT - 200 (userId ignored)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals/{{goalId}}",
+        "description": "Saugumo testas: vartotojas1 bando per PUT body atsiusti svetima userId ir taip 'perkelti' savo tiksla kitam naudotojui. Serveris is body ima tik leistinus laukus (pick), todel userId ignoruojamas ir tikslas lieka vartotojas1.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"userId\": {{adminUserId}}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Saugumo testas: vartotojas1 bando per PUT body atsiusti svetima userId ir taip 'perkelti' savo tiksla kitam naudotojui. Serveris is body ima tik leistinus laukus (pick), todel userId ignoruojamas ir tikslas lieka vartotojas1.",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('userId nepasikeite - tikslas liko vartotojas1', () => {",
+              "  pm.expect(pm.response.json().userId).to.eql(Number(pm.collectionVariables.get('user1Id')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 Refresh token (user1 cookie) - 200",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/auth/refresh",
+        "description": "Gaunamas naujas access tokenas naudojant refresh tokena is httpOnly cookie (Postman ja issaugojo 11 teste). Senas refresh tokenas atsaukiamas, isduodamas naujas (rotacija)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Gaunamas naujas access tokenas naudojant refresh tokena is httpOnly cookie (Postman ja issaugojo 11 teste). Senas refresh tokenas atsaukiamas, isduodamas naujas (rotacija).",
+              "pm.test('200 - gautas naujas access tokenas', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('userToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 Logout (user1) - 204",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/auth/logout",
+        "description": "Atsijungimas: refresh tokenas DB pazymimas revoked=true, cookie istrinamas. Atsakymas 204 No Content."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Atsijungimas: refresh tokenas DB pazymimas revoked=true, cookie istrinamas. Atsakymas 204 No Content.",
+              "pm.test('204 - atsijungta', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 Refresh AFTER logout - 401",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/auth/refresh",
+        "description": "Po atsijungimo bandoma atnaujinti tokena. Refresh tokenas jau atsauktas, todel serveris atsako 401."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Po atsijungimo bandoma atnaujinti tokena. Refresh tokenas jau atsauktas, todel serveris atsako 401.",
+              "pm.test('401 - refresh tokenas atsauktas', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 Login vartotojas2 - 200 (capture user2Token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Prisijungia kitas paprastas naudotojas vartotojas2. Jo tokenas (user2Token) naudojamas bandant pasiekti svetimus duomenis.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"vartotojas2@example.com\", \"password\": \"Vartotojas123!\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Prisijungia kitas paprastas naudotojas vartotojas2. Jo tokenas (user2Token) naudojamas bandant pasiekti svetimus duomenis.",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('user2Token', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 Get SVETIMA Goal (user2 -> user1 tikslas) - 403",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{user2Token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals/{{goalId}}",
+        "description": "vartotojas2 bando paziureti vartotojas1 tiksla. Abu turi ta pacia role 'user', bet tikslas ne jo - ensureGoalAccess grazina 403. Tai parodo apsauga pagal ID, ne tik pagal role."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// vartotojas2 bando paziureti vartotojas1 tiksla. Abu turi ta pacia role 'user', bet tikslas ne jo - ensureGoalAccess grazina 403. Tai parodo apsauga pagal ID, ne tik pagal role.",
+              "pm.test('403 - role (user) neapsaugo nuo svetimo resurso', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 Missing Goal - 404",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/goals/999999",
+        "description": "Uzklausiamas neegzistuojantis tikslas. Serveris atsako 404 Not Found."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Uzklausiamas neegzistuojantis tikslas. Serveris atsako 404 Not Found.",
+              "pm.test('404 - tikslas nerastas', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 List Users as regular user - 403",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{user2Token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users",
+        "description": "Paprastas naudotojas bando gauti visu naudotoju sarasa. Tai gali tik admin, todel 403 Forbidden."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Paprastas naudotojas bando gauti visu naudotoju sarasa. Tai gali tik admin, todel 403 Forbidden.",
+              "pm.test('403 - tik admin', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 List Users as admin - 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users",
+        "description": "Administratorius gauna visu naudotoju sarasa su puslapiavimu."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius gauna visu naudotoju sarasa su puslapiavimu.",
+              "pm.test('200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 Admin: Update user role - 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/{{newUserId}}",
+        "description": "Administratorius pakeicia 02 teste sukurto naudotojo role i 'admin'. Roles keisti gali tik admin.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"role\": \"admin\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius pakeicia 02 teste sukurto naudotojo role i 'admin'. Roles keisti gali tik admin.",
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('role pasikeite', () => pm.expect(pm.response.json().role).to.eql('admin'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 Admin: Delete SELF - 409",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/{{adminUserId}}",
+        "description": "Administratorius bando istrinti pats save. Tai uzdrausta (kad sistema neliktu be admin), atsakymas 409 Conflict."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius bando istrinti pats save. Tai uzdrausta (kad sistema neliktu be admin), atsakymas 409 Conflict.",
+              "pm.test('409 - negalima istrinti saves', () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 Admin: Delete new user - 204",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/{{newUserId}}",
+        "description": "Administratorius istrina 02 teste sukurta naudotoja. Atsakymas 204 No Content."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius istrina 02 teste sukurta naudotoja. Atsakymas 204 No Content.",
+              "pm.test('204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 Admin: Delete role-escalation user - 204",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/{{hackUserId}}",
+        "description": "Isvalymas: admin istrina 05 teste sukurta naudotoja, kad DB neliktu testiniu paskyru."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Isvalymas: admin istrina 05 teste sukurta naudotoja, kad DB neliktu testiniu paskyru.",
+              "pm.test('204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 Admin: Delete user-created Food - 204",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/foods/{{userFoodId}}",
+        "description": "Administratorius istrina 15 teste paprasto naudotojo sukurta maista (16 teste naudotojui tai buvo uzdrausta)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Administratorius istrina 15 teste paprasto naudotojo sukurta maista (16 teste naudotojui tai buvo uzdrausta).",
+              "pm.test('204 - admin gali trinti', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "32 Admin: Delete admin-created Food - 204",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/foods/{{foodId}}",
+        "description": "Isvalymas: admin istrina 17 teste sukurta maista."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Isvalymas: admin istrina 17 teste sukurta maista.",
+              "pm.test('204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

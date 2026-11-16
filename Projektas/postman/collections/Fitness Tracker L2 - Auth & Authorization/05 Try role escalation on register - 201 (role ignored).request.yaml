@@ -1,0 +1,22 @@
+$kind: http-request
+description: "Saugumo testas: bandoma uzsiregistruoti su role 'admin'. Serveris paskyra sukuria, bet role IGNORUOJA - naujas naudotojas vis tiek 'user'. Taip apsisaugoma nuo teisiu eskalacijos."
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"email": "hack_{{$timestamp}}@example.com", "password": "Hack123!", "role": "admin"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Saugumo testas: bandoma uzsiregistruoti su role 'admin'. Serveris paskyra sukuria, bet role IGNORUOJA - naujas naudotojas vis tiek 'user'. Taip apsisaugoma nuo teisiu eskalacijos.
+      {
+      pm.test('201 - paskyra sukurta', () => pm.response.to.have.status(201));
+      const data = pm.response.json();
+      pm.test('role vis tiek user, ne admin', () => pm.expect(data.role).to.eql('user'));
+      // Issaugome ID, kad testo pabaigoje admin istrintu si naudotoja (DB liktu svari).
+      pm.collectionVariables.set('hackUserId', data.id);
+      }
+    language: text/javascript
+order: 5000

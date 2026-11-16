@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}/entries"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"foodId":"{{newFoodId}}",'
+scripts:
+  - type: afterResponse
+    code: pm.test('400 - blogas JSON', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 15000

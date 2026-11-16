@@ -1,0 +1,17 @@
+$kind: http-request
+description: vartotojas1 jau turi tiksla, o vienam naudotojui leidziamas tik vienas. Serveris turi atsakyti 409 Conflict.
+url: "{{baseUrl}}/goals"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{userToken}}
+body:
+  type: text
+  content: '{"title": "Mazinti svori", "type": "weight_loss", "startWeightKg": 80, "targetWeightKg": 75, "heightCm": 175, "age": 25}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // vartotojas1 jau turi tiksla, o vienam naudotojui leidziamas tik vienas. Serveris turi atsakyti 409 Conflict.
+      pm.test('409 - vienam vartotojui tik vienas tikslas', () => pm.response.to.have.status(409));
+    language: text/javascript
+order: 14000

@@ -1,0 +1,8 @@
+$kind: collection
+description: ""
+variables:
+  baseUrl: http://localhost:3000/api
+  goalId: "1"
+  logId: "1"
+  foodId: "1"
+  entryId: "1"

@@ -1,0 +1,13 @@
+$kind: http-request
+description: Administratorius gauna visu naudotoju sarasa su puslapiavimu.
+url: "{{baseUrl}}/users"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Administratorius gauna visu naudotoju sarasa su puslapiavimu.
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 26000

@@ -1,0 +1,14 @@
+$kind: http-request
+name: "31 Admin: Delete user-created Food - 204"
+description: Administratorius istrina 15 teste paprasto naudotojo sukurta maista (16 teste naudotojui tai buvo uzdrausta).
+url: "{{baseUrl}}/foods/{{userFoodId}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Administratorius istrina 15 teste paprasto naudotojo sukurta maista (16 teste naudotojui tai buvo uzdrausta).
+      pm.test('204 - admin gali trinti', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 31000

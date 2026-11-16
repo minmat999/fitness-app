@@ -1,0 +1,13 @@
+$kind: http-request
+description: Paprastas naudotojas bando istrinti maista is katalogo. Trinti ir redaguoti kataloga gali TIK admin (authorize('admin')), todel atsakymas 403 Forbidden.
+url: "{{baseUrl}}/foods/{{userFoodId}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{userToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // Paprastas naudotojas bando istrinti maista is katalogo. Trinti ir redaguoti kataloga gali TIK admin (authorize('admin')), todel atsakymas 403 Forbidden.
+      pm.test('403 - tik admin gali trinti maista', () => pm.response.to.have.status(403));
+    language: text/javascript
+order: 16000

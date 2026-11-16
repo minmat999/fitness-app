@@ -1,0 +1,17 @@
+$kind: http-request
+description: Prisijungia kitas paprastas naudotojas vartotojas2. Jo tokenas (user2Token) naudojamas bandant pasiekti svetimus duomenis.
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"email": "vartotojas2@example.com", "password": "Vartotojas123!"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Prisijungia kitas paprastas naudotojas vartotojas2. Jo tokenas (user2Token) naudojamas bandant pasiekti svetimus duomenis.
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.collectionVariables.set('user2Token', pm.response.json().accessToken);
+    language: text/javascript
+order: 22000

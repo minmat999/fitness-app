@@ -1,0 +1,16 @@
+$kind: http-request
+description: Bando registruotis su tuo paciu el. pastu kaip 02 teste. Serveris turi atsakyti 409 Conflict - toks naudotojas jau yra.
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"email": "{{newUserEmail}}", "password": "Kitas123!"}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Bando registruotis su tuo paciu el. pastu kaip 02 teste. Serveris turi atsakyti 409 Conflict - toks naudotojas jau yra.
+      pm.test('409 - el. pastas jau uzimtas', () => pm.response.to.have.status(409));
+    language: text/javascript
+order: 3000

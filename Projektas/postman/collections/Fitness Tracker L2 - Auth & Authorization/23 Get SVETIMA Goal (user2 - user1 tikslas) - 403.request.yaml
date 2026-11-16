@@ -1,0 +1,14 @@
+$kind: http-request
+name: 23 Get SVETIMA Goal (user2 -> user1 tikslas) - 403
+description: vartotojas2 bando paziureti vartotojas1 tiksla. Abu turi ta pacia role 'user', bet tikslas ne jo - ensureGoalAccess grazina 403. Tai parodo apsauga pagal ID, ne tik pagal role.
+url: "{{baseUrl}}/goals/{{goalId}}"
+method: GET
+headers:
+  Authorization: Bearer {{user2Token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // vartotojas2 bando paziureti vartotojas1 tiksla. Abu turi ta pacia role 'user', bet tikslas ne jo - ensureGoalAccess grazina 403. Tai parodo apsauga pagal ID, ne tik pagal role.
+      pm.test('403 - role (user) neapsaugo nuo svetimo resurso', () => pm.response.to.have.status(403));
+    language: text/javascript
+order: 23000

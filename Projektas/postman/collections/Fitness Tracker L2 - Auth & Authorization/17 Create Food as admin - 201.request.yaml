@@ -1,0 +1,18 @@
+$kind: http-request
+description: Administratorius prideda maista i kataloga. Sukurto maisto ID issaugomas (foodId), kad pabaigoje butu istrintas.
+url: "{{baseUrl}}/foods"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: '{"name": "L2 testinis maistas", "caloriesPer100g": 180, "proteinPer100g": 12, "carbsPer100g": 10, "fatPer100g": 6}'
+scripts:
+  - type: afterResponse
+    code: |-
+      // Administratorius prideda maista i kataloga. Sukurto maisto ID issaugomas (foodId), kad pabaigoje butu istrintas.
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('foodId', pm.response.json().id);
+    language: text/javascript
+order: 17000

@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/goals/{{goalId}}/logs/{{newLogId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{"activity":"high"}'
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 9000
